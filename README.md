@@ -3,6 +3,11 @@
 ブラウザで動作する「データベース正規化学習教材」のMVPです。  
 非正規形から第3正規形までを対象とし、学習者がレコードを編集・追加・削除しながら、更新異常・挿入異常・削除異常を体験できるようにします。
 
+## 公開URL
+
+GitHub Pages で公開しています。  
+[https://kobashi.github.io/NormalizationZoo/](https://kobashi.github.io/NormalizationZoo/)
+
 ## 概要
 
 この教材は、データベースの正規化をブラウザ上で学ぶためのインタラクティブ教材です。
