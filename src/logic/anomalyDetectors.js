@@ -10,6 +10,38 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
     cells.forEach((cell) => highlights.add(cell));
   };
 
+  tables.forEach((table, tableIndex) => {
+    const primaryKey = table.primaryKey ?? [];
+    if (primaryKey.length === 0) {
+      return;
+    }
+
+    const seenKeys = new Map();
+
+    table.rows.forEach((row, rowIndex) => {
+      const keyValues = primaryKey.map((colIndex) => String(row[colIndex] ?? '').trim());
+      if (keyValues.some((value) => value === '')) {
+        return;
+      }
+
+      const keyText = keyValues.join('::');
+      const keyCells = primaryKey.map((colIndex) => makeCellKey(tableIndex, rowIndex, colIndex));
+      const prev = seenKeys.get(keyText);
+
+      if (prev) {
+        addIssue(
+          primaryKey.length > 1
+            ? `複合主キー「${keyValues.join(' + ')}」が重複しています。同じ主キーを持つ行を挿入してしまっており、更新異常の原因になります。`
+            : `主キー「${keyValues[0]}」が重複しています。同じ主キーを持つ行を挿入してしまっており、更新異常の原因になります。`,
+          [...prev.keyCells, ...keyCells],
+          [tableIndex]
+        );
+      } else {
+        seenKeys.set(keyText, { keyCells });
+      }
+    });
+  });
+
   if (stageId === 'unf') {
     const table = tables[0];
     const customerAddressMap = new Map();
