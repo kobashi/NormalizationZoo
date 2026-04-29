@@ -1,4 +1,5 @@
 import React from 'react';
+import GlossaryText from './GlossaryText.jsx';
 
 function FieldPill({ children, accent = false }) {
   return <span className={`diagram-pill ${accent ? 'accent' : ''}`}>{children}</span>;
@@ -70,6 +71,102 @@ function TransitiveDiagram({ section }) {
   );
 }
 
+function BcnfDiagram({ section }) {
+  return (
+    <div className="diagram-stack">
+      <div className="dependency-row">
+        <div className="field-group">
+          {section.keyFields.map((field) => (
+            <FieldPill key={field} accent>
+              {field}
+            </FieldPill>
+          ))}
+        </div>
+        <span className="diagram-caption">候補キー 1</span>
+      </div>
+      {section.alternateKeyFields ? (
+        <div className="dependency-row">
+          <div className="field-group">
+            {section.alternateKeyFields.map((field) => (
+              <FieldPill key={field} accent>
+                {field}
+              </FieldPill>
+            ))}
+          </div>
+          <span className="diagram-caption">候補キー 2</span>
+        </div>
+      ) : null}
+      <div className="dependency-row">
+        <FieldPill accent>{section.determinantField}</FieldPill>
+        <span className="diagram-arrow">→</span>
+        <div className="field-group">
+          {section.dependentFields.map((field) => (
+            <FieldPill key={field}>{field}</FieldPill>
+          ))}
+        </div>
+      </div>
+      <div className="dependency-row">
+        <span className="diagram-caption">決定項が候補キーではないため、同じ事実が重複する</span>
+      </div>
+    </div>
+  );
+}
+
+function MultivaluedDiagram({ section }) {
+  return (
+    <div className="diagram-stack">
+      <div className="dependency-row">
+        <FieldPill accent>{section.sourceField}</FieldPill>
+        <span className="diagram-arrow">↠</span>
+        <div className="field-group">
+          {section.leftFields.map((field) => (
+            <FieldPill key={field}>{field}</FieldPill>
+          ))}
+        </div>
+      </div>
+      <div className="dependency-row">
+        <FieldPill accent>{section.sourceField}</FieldPill>
+        <span className="diagram-arrow">↠</span>
+        <div className="field-group">
+          {section.rightFields.map((field) => (
+            <FieldPill key={field}>{field}</FieldPill>
+          ))}
+        </div>
+      </div>
+      <div className="dependency-row">
+        <span className="diagram-caption">2つの多値事実が独立していると、1表では組合せ行が増える</span>
+      </div>
+    </div>
+  );
+}
+
+function JoinDiagram({ section }) {
+  return (
+    <div className="resolved-grid">
+      <div className="resolved-card">
+        <strong>三者関係</strong>
+        <div className="field-group">
+          {section.centerFields.map((field) => (
+            <FieldPill key={field} accent>
+              {field}
+            </FieldPill>
+          ))}
+        </div>
+      </div>
+      {section.edgeGroups.map((group) => (
+        <div key={group.title} className="resolved-card">
+          <strong>{group.title}</strong>
+          <div className="field-group">
+            {group.fields.map((field) => (
+              <FieldPill key={field}>{field}</FieldPill>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ResolvedDiagram({ section }) {
   return (
     <div className="resolved-grid">
@@ -96,6 +193,15 @@ function HintDiagram({ section }) {
   }
   if (section.kind === 'transitive') {
     return <TransitiveDiagram section={section} />;
+  }
+  if (section.kind === 'bcnf') {
+    return <BcnfDiagram section={section} />;
+  }
+  if (section.kind === 'multivalued') {
+    return <MultivaluedDiagram section={section} />;
+  }
+  if (section.kind === 'join') {
+    return <JoinDiagram section={section} />;
   }
   return <ResolvedDiagram section={section} />;
 }
@@ -128,7 +234,7 @@ function HintModal({ stage, isOpen, onClose }) {
           {stage.hint.sections.map((section) => (
             <section key={section.label} className="hint-section">
               <h4>{section.label}</h4>
-              <p>{section.description}</p>
+              <p><GlossaryText text={section.description} /></p>
               <HintDiagram section={section} />
             </section>
           ))}

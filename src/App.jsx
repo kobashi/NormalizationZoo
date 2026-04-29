@@ -9,6 +9,7 @@ import { analyzeStage } from './logic/anomalyDetectors.js';
 const createInitialStageTables = () => stages.map((stage) => cloneTables(stage.tables));
 const createInitialSelections = () => stages.map((stage) => stage.tables.map(() => []));
 const createInitialScenarioMarks = () => stages.map((stage) => stage.tables.map(() => new Set()));
+const createInitialStageNotes = () => stages.map(() => null);
 
 const parsePrimaryKeyCounter = (rows, keyIndex) => {
   const samples = rows.map((row) => String(row[keyIndex] ?? '')).filter(Boolean);
@@ -219,6 +220,134 @@ const scenarioExecutors = {
     '異常なしの状態に戻して比較する': () => {
       return { analysisTables: [0, 1, 2, 3, 4] };
     }
+  },
+  bcnf: {
+    'S-01の訪問曜日を1行だけ変更': (tablesForStage) => {
+      tablesForStage[0].rows[1][1] = '水曜';
+      return { analysisTables: [0] };
+    },
+    'S-02の最後の行を削除': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter((row) => row[2] !== 'S-02');
+      return { analysisTables: [0] };
+    },
+    '新しい担当営業だけ追加してみる': (tablesForStage) => {
+      tablesForStage[0].rows.push(['', '金曜', 'S-03']);
+      return { analysisTables: [0] };
+    }
+  },
+  '4nf': {
+    'P-01に新しい仕入先を1つ追加': (tablesForStage) => {
+      tablesForStage[0].rows.push(['P-01', '中央青果', '店舗販売']);
+      return { analysisTables: [0] };
+    },
+    'P-01の1行だけ削除': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter(
+        (row) => !(row[0] === 'P-01' && row[1] === '北果物商事' && row[2] === 'EC販売')
+      );
+      return { analysisTables: [0] };
+    },
+    'P-01に新しい販売チャネルを追加': (tablesForStage) => {
+      tablesForStage[0].rows.push(['P-01', '北果物商事', '催事販売']);
+      return { analysisTables: [0] };
+    }
+  },
+  '5nf': {
+    '1つの三者組だけ削除': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter(
+        (row) => !(row[0] === 'りんごジュース' && row[1] === '青空マート' && row[2] === 'ひかり配送')
+      );
+      return { analysisTables: [0] };
+    },
+    '成立しそうな三者組を1つ追加': (tablesForStage) => {
+      tablesForStage[0].rows.push(['みかんジャム', '青空マート', 'ひかり配送']);
+      return { analysisTables: [0] };
+    },
+    '販売店と配送業者の対応を1行だけ変える': (tablesForStage) => {
+      tablesForStage[0].rows[2][2] = 'ひかり配送';
+      return { analysisTables: [0] };
+    }
+  }
+};
+
+const tediousScenarioExecutors = {
+  '1nf': {
+    '田中商店の住所を正しく変更する': (tablesForStage) => {
+      tablesForStage[0].rows.forEach((row) => {
+        if (row[4] === '田中商店') {
+          row[5] = '東京都港区9-9';
+        }
+      });
+    },
+    'りんごの価格改定を正しく反映する': (tablesForStage) => {
+      tablesForStage[0].rows.forEach((row) => {
+        if (row[1] === 'りんご') {
+          row[2] = '140';
+        }
+      });
+    }
+  },
+  '2nf': {
+    '佐藤の営業部門名を正しく変更する': (tablesForStage) => {
+      tablesForStage[3].rows.forEach((row) => {
+        if (row[3] === '佐藤') {
+          row[4] = '首都圏営業部';
+        }
+      });
+    },
+    '新しい担当営業を2社の顧客付きで登録する': (tablesForStage) => {
+      tablesForStage[3].rows.push(['C-04', '山川商会', '群馬県高崎市7-1', '中村', '中部営業部']);
+      tablesForStage[3].rows.push(['C-05', '海風ストア', '静岡県静岡市4-3', '中村', '中部営業部']);
+    }
+  },
+  '3nf': {
+    '新しい注文を2商品で登録する': (tablesForStage) => {
+      tablesForStage[0].rows.push(['O-103', 'C-02']);
+      tablesForStage[1].rows.push(['O-103', 'P-02', '2']);
+      tablesForStage[1].rows.push(['O-103', 'P-06', '1']);
+    },
+    '注文O-101を正しく取り消す': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter((row) => row[0] !== 'O-101');
+      tablesForStage[1].rows = tablesForStage[1].rows.filter((row) => row[0] !== 'O-101');
+    }
+  },
+  bcnf: {
+    'S-01の訪問曜日を正しく変更する': (tablesForStage) => {
+      tablesForStage[0].rows.forEach((row) => {
+        if (row[2] === 'S-01') {
+          row[1] = '水曜';
+        }
+      });
+    },
+    '新しい担当営業S-03を2顧客に割り当てて登録する': (tablesForStage) => {
+      tablesForStage[0].rows.push(['C-04', '金曜', 'S-03']);
+      tablesForStage[0].rows.push(['C-05', '金曜', 'S-03']);
+    }
+  },
+  '4nf': {
+    'P-01に新しい仕入先を正しく追加する': (tablesForStage) => {
+      tablesForStage[0].rows.push(['P-01', '中央青果', '店舗販売']);
+      tablesForStage[0].rows.push(['P-01', '中央青果', 'EC販売']);
+    },
+    'P-01に新しい販売チャネルを正しく追加する': (tablesForStage) => {
+      tablesForStage[0].rows.push(['P-01', '北果物商事', '催事販売']);
+      tablesForStage[0].rows.push(['P-01', '南青果センター', '催事販売']);
+    }
+  },
+  '5nf': {
+    '青空マートがりんごジュースの取扱いをやめる': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter(
+        (row) => !(row[0] === 'りんごジュース' && row[1] === '青空マート')
+      );
+    },
+    'りんごジュースをさくら便で配送できなくする': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter(
+        (row) => !(row[0] === 'りんごジュース' && row[2] === 'さくら便')
+      );
+    },
+    '青空マートがみかんジャムを扱えるようにする': (tablesForStage) => {
+      tablesForStage[0].rows.push(['みかんジャム', '青空マート', 'さくら便']);
+      tablesForStage[0].rows.push(['みかんジャム', '青空マート', 'ひかり配送']);
+    }
   }
 };
 
@@ -230,12 +359,18 @@ function App() {
   const [selectedRowsByStage, setSelectedRowsByStage] = useState(createInitialSelections);
   const [autoCountersByStage, setAutoCountersByStage] = useState(createInitialAutoCounters);
   const [scenarioMarksByStage, setScenarioMarksByStage] = useState(createInitialScenarioMarks);
+  const [stageNotes, setStageNotes] = useState(createInitialStageNotes);
 
   const stage = stages[stageIndex];
   const tables = stageTables[stageIndex];
   const selectedRows = selectedRowsByStage[stageIndex];
   const stageAnalysis = analysis[stage.id] ?? [];
+  const stageNote = stageNotes[stageIndex];
   const isLastStage = stageIndex === stages.length - 1;
+
+  const clearStageNote = () => {
+    setStageNotes((prev) => prev.map((note, index) => (index === stageIndex ? null : note)));
+  };
 
   const clearStageFeedback = () => {
     setAnalysis((prev) => {
@@ -263,6 +398,7 @@ function App() {
       )
     );
     clearStageFeedback();
+    clearStageNote();
   };
 
   const updateCell = (tableIndex, rowIndex, colIndex, value) => {
@@ -429,6 +565,7 @@ function App() {
       nextStageAnalysis[tableIndex] = filtered;
       return { ...prev, [stage.id]: nextStageAnalysis };
     });
+    clearStageNote();
   };
 
   const moveNext = () => {
@@ -469,6 +606,48 @@ function App() {
       prev.map((marksForStage, sIndex) => (sIndex === stageIndex ? nextScenarioMarks : marksForStage))
     );
     setAnalysis((prev) => ({ ...prev, [stage.id]: nextStageAnalysis }));
+    clearStageNote();
+  };
+
+  const runTediousScenario = (scenarioLabel) => {
+    const executor = tediousScenarioExecutors[stage.id]?.[scenarioLabel];
+    const scenario = stage.tediousScenarios?.find((item) => item.label === scenarioLabel);
+    if (!executor || !scenario) {
+      return;
+    }
+
+    const baselineTables = cloneTables(stages[stageIndex].tables);
+    const nextTablesForStage = cloneTables(stages[stageIndex].tables);
+    executor(nextTablesForStage);
+    const nextScenarioMarks = buildScenarioMarksForTables(baselineTables, nextTablesForStage);
+
+    setStageTables((prev) =>
+      prev.map((tablesForStage, sIndex) => (sIndex === stageIndex ? nextTablesForStage : tablesForStage))
+    );
+    setSelectedRowsByStage((prev) =>
+      prev.map((selectedForStage, sIndex) =>
+        sIndex === stageIndex ? nextTablesForStage.map(() => []) : selectedForStage
+      )
+    );
+    setAutoCountersByStage((prev) =>
+      prev.map((stageCounters, sIndex) =>
+        sIndex === stageIndex ? buildAutoCountersForTables(nextTablesForStage) : stageCounters
+      )
+    );
+    setScenarioMarksByStage((prev) =>
+      prev.map((marksForStage, sIndex) => (sIndex === stageIndex ? nextScenarioMarks : marksForStage))
+    );
+    setAnalysis((prev) => ({
+      ...prev,
+      [stage.id]: nextTablesForStage.map(() => null)
+    }));
+    setStageNotes((prev) =>
+      prev.map((note, sIndex) =>
+        sIndex === stageIndex
+          ? { title: '面倒だけど正しい操作', message: scenario.message }
+          : note
+      )
+    );
   };
 
   return (
@@ -515,6 +694,8 @@ function App() {
             isLastStage={isLastStage}
             onOpenHint={() => setIsHintOpen(true)}
             onRunTip={runTipScenario}
+            onRunTediousScenario={runTediousScenario}
+            scenarioNote={stageNote}
             onNext={moveNext}
           />
 

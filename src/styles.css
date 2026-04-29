@@ -197,6 +197,80 @@ button {
   font-size: 0.92rem;
 }
 
+.tedious-button {
+  background: #e7f2f0;
+  color: #244f4a;
+  border: 1px solid rgba(36, 79, 74, 0.12);
+}
+
+.tedious-button:hover {
+  background: #dcedea;
+}
+
+.scenario-note {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #fff8e8;
+  border: 1px solid rgba(201, 94, 26, 0.18);
+  color: #5b4523;
+}
+
+.scenario-note strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.scenario-note p {
+  margin: 0;
+}
+
+.glossary-term {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border-bottom: 1px dotted rgba(31, 42, 68, 0.45);
+  cursor: help;
+}
+
+.glossary-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  width: 240px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #172033;
+  color: #f8f4eb;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  box-shadow: 0 10px 24px rgba(23, 32, 51, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  white-space: normal;
+  z-index: 20;
+}
+
+.glossary-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #172033 transparent transparent transparent;
+}
+
+.glossary-term:hover .glossary-tooltip,
+.glossary-term:focus-visible .glossary-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+
 .tip-button {
   position: relative;
   border: none;

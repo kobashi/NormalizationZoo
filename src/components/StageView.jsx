@@ -1,4 +1,5 @@
 import React from 'react';
+import GlossaryText from './GlossaryText.jsx';
 
 function StageView({
   stage,
@@ -7,6 +8,8 @@ function StageView({
   isLastStage,
   onOpenHint,
   onRunTip,
+  onRunTediousScenario,
+  scenarioNote,
   onNext
 }) {
   return (
@@ -23,10 +26,10 @@ function StageView({
 
       <div className="mission-box">
         <h3>ミッション</h3>
-        <p>{stage.mission}</p>
+        <p><GlossaryText text={stage.mission} /></p>
       </div>
 
-      <p className="description">{stage.description}</p>
+      <p className="description"><GlossaryText text={stage.description} /></p>
 
       <div className="tips">
         <span>試してみよう:</span>
@@ -42,7 +45,26 @@ function StageView({
             <span className="tip-tooltip">{tip.context}</span>
           </button>
         ))}
+        {stage.tediousScenarios?.map((scenario) => (
+          <button
+            key={scenario.label}
+            type="button"
+            className="tip-button tedious-button"
+            onClick={() => onRunTediousScenario(scenario.label)}
+            aria-label={`${scenario.label}: ${scenario.context}`}
+          >
+            <span>{scenario.label}</span>
+            <span className="tip-tooltip">{scenario.context}</span>
+          </button>
+        ))}
       </div>
+
+      {scenarioNote ? (
+        <div className="scenario-note">
+          <strong>{scenarioNote.title}</strong>
+          <p><GlossaryText text={scenarioNote.message} /></p>
+        </div>
+      ) : null}
 
       <div className="stage-footer">
         <div className="goal-box">
