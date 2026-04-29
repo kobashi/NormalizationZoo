@@ -6,6 +6,7 @@ function StageView({
   stageCount,
   isLastStage,
   onOpenHint,
+  onRunTip,
   onNext
 }) {
   return (
@@ -30,7 +31,14 @@ function StageView({
       <div className="tips">
         <span>試してみよう:</span>
         {stage.tips.map((tip) => (
-          <span key={tip}>{tip}</span>
+          <button
+            key={tip}
+            type="button"
+            className="tip-button"
+            onClick={() => onRunTip(tip)}
+          >
+            {tip}
+          </button>
         ))}
       </div>
 

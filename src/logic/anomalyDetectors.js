@@ -53,6 +53,8 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
       const orderId = row[0] ?? '';
       const customer = row[1] ?? '';
       const address = row[2] ?? '';
+      const sales = row[6] ?? '';
+      const division = row[7] ?? '';
       const productParts = productCell
         .split(',')
         .map((item) => item.trim())
@@ -97,13 +99,20 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
 
       if (customer) {
         const prev = customerAddressMap.get(customer);
-        if (prev && prev.address !== address) {
+        if (prev && (prev.address !== address || prev.sales !== sales || prev.division !== division)) {
           addIssue(
-            `「${customer}」の住所が行ごとに一致していません。顧客情報の更新異常です。`,
-            [makeCellKey(0, prev.rowIndex, 2), makeCellKey(0, rowIndex, 2)]
+            `「${customer}」の住所、担当営業、または営業部門が行ごとに一致していません。顧客情報の更新異常です。`,
+            [
+              makeCellKey(0, prev.rowIndex, 2),
+              makeCellKey(0, prev.rowIndex, 6),
+              makeCellKey(0, prev.rowIndex, 7),
+              makeCellKey(0, rowIndex, 2),
+              makeCellKey(0, rowIndex, 6),
+              makeCellKey(0, rowIndex, 7)
+            ]
           );
         } else if (!prev) {
-          customerAddressMap.set(customer, { address, rowIndex });
+          customerAddressMap.set(customer, { address, sales, division, rowIndex });
         }
       }
     });
@@ -124,6 +133,7 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
       const customer = row[4] ?? '';
       const address = row[5] ?? '';
       const sales = row[6] ?? '';
+      const division = row[7] ?? '';
 
       if (!orderId || !product || !quantity) {
         addIssue(
@@ -134,17 +144,19 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
 
       if (orderId) {
         const prev = orderInfoMap.get(orderId);
-        const snapshot = JSON.stringify([customer, address, sales]);
+        const snapshot = JSON.stringify([customer, address, sales, division]);
         if (prev && prev.snapshot !== snapshot) {
           addIssue(
-            `注文ID「${orderId}」に対する顧客情報または担当営業が行によって異なります。重複更新のズレです。`,
+            `注文ID「${orderId}」に対する顧客情報、担当営業、または営業部門が行によって異なります。重複更新のズレです。`,
             [
               makeCellKey(0, prev.rowIndex, 4),
               makeCellKey(0, prev.rowIndex, 5),
               makeCellKey(0, prev.rowIndex, 6),
+              makeCellKey(0, prev.rowIndex, 7),
               makeCellKey(0, rowIndex, 4),
               makeCellKey(0, rowIndex, 5),
-              makeCellKey(0, rowIndex, 6)
+              makeCellKey(0, rowIndex, 6),
+              makeCellKey(0, rowIndex, 7)
             ]
           );
         } else if (!prev) {
@@ -156,7 +168,7 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
         if (!customerRows.has(customer)) {
           customerRows.set(customer, []);
         }
-        customerRows.get(customer).push({ rowIndex, address, sales });
+        customerRows.get(customer).push({ rowIndex, address, sales, division });
       }
 
       if (!product) {
@@ -171,13 +183,15 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
     customerRows.forEach((entries, customer) => {
       const addresses = new Set(entries.map((entry) => entry.address));
       const salesPeople = new Set(entries.map((entry) => entry.sales));
+      const divisions = new Set(entries.map((entry) => entry.division));
 
-      if (addresses.size > 1 || salesPeople.size > 1) {
+      if (addresses.size > 1 || salesPeople.size > 1 || divisions.size > 1) {
         addIssue(
-          `顧客「${customer}」の情報が複数行で一致していません。顧客属性が注文明細に混在しています。`,
+          `顧客「${customer}」の情報が複数行で一致していません。住所、担当営業、営業部門などの顧客属性が注文明細に混在しています。`,
           entries.flatMap((entry) => [
             makeCellKey(0, entry.rowIndex, 5),
-            makeCellKey(0, entry.rowIndex, 6)
+            makeCellKey(0, entry.rowIndex, 6),
+            makeCellKey(0, entry.rowIndex, 7)
           ])
         );
       }
@@ -206,11 +220,12 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
         const customer = row[4] ?? '';
         const address = row[5] ?? '';
         const sales = row[6] ?? '';
+        const division = row[7] ?? '';
         const product = row[1] ?? '';
         const price = row[2] ?? '';
 
         if (customer && !baselineCustomers.has(customer)) {
-          baselineCustomers.set(customer, { address, sales });
+          baselineCustomers.set(customer, { address, sales, division });
         }
         if (product && !baselineProducts.has(product)) {
           baselineProducts.set(product, { price });
@@ -220,7 +235,7 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
       baselineCustomers.forEach((info, customer) => {
         if (!customerRows.has(customer)) {
           addIssue(
-            `削除の結果、顧客「${customer}」の注文行がすべて消え、住所「${info.address}」や担当営業「${info.sales}」もテーブルから失われました。顧客情報まで一緒に消える削除異常です。`
+            `削除の結果、顧客「${customer}」の注文行がすべて消え、住所「${info.address}」、担当営業「${info.sales}」、営業部門「${info.division}」もテーブルから失われました。顧客情報まで一緒に消える削除異常です。`
           );
         }
       });
@@ -252,7 +267,7 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
     const products = tables[2];
     const customers = tables[3];
     const baselineCustomers = baselineTables?.[3];
-    const salesDeptMap = new Map();
+    const salesInfoMap = new Map();
     const orderIdSet = new Set(orders.rows.map((row) => row[0]).filter(Boolean));
     const productIdSet = new Set(products.rows.map((row) => row[0]).filter(Boolean));
     const customerIdSet = new Set(customers.rows.map((row) => row[0]).filter(Boolean));
@@ -317,14 +332,17 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
         return;
       }
 
-      const prev = salesDeptMap.get(sales);
+      const prev = salesInfoMap.get(sales);
       if (prev && prev.dept !== dept) {
         addIssue(
           `担当営業「${sales}」の営業部門が顧客行ごとに一致していません。推移的従属による更新異常です。`,
-          [makeCellKey(3, prev.rowIndex, 4), makeCellKey(3, rowIndex, 4)]
+          [
+            makeCellKey(3, prev.rowIndex, 4),
+            makeCellKey(3, rowIndex, 4)
+          ]
         );
       } else if (!prev) {
-        salesDeptMap.set(sales, { dept, rowIndex });
+        salesInfoMap.set(sales, { dept, rowIndex });
       }
     });
 

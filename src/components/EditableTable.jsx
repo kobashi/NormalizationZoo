@@ -6,6 +6,7 @@ function EditableTable({
   tableIndex,
   selectedRows,
   highlights,
+  modifiedCells,
   analysis,
   onToggleRowSelection,
   onUpdateCell,
@@ -101,6 +102,7 @@ function EditableTable({
                         <input
                           value={cell}
                           size={inputSize}
+                          className={modifiedCells?.has(cellKey) ? 'scenario-modified' : ''}
                           onChange={(event) =>
                             onUpdateCell(tableIndex, rowIndex, colIndex, event.target.value)
                           }

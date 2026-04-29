@@ -8,6 +8,7 @@ import { analyzeStage } from './logic/anomalyDetectors.js';
 
 const createInitialStageTables = () => stages.map((stage) => cloneTables(stage.tables));
 const createInitialSelections = () => stages.map((stage) => stage.tables.map(() => []));
+const createInitialScenarioMarks = () => stages.map((stage) => stage.tables.map(() => new Set()));
 
 const parsePrimaryKeyCounter = (rows, keyIndex) => {
   const samples = rows.map((row) => String(row[keyIndex] ?? '')).filter(Boolean);
@@ -87,6 +88,140 @@ const filterAnalysisByTable = (fullAnalysis, tableIndex) => {
   return { issues, highlights };
 };
 
+const buildAutoCountersForTables = (tablesForStage) =>
+  tablesForStage.map((table) => {
+    if ((table.primaryKey?.length ?? 0) !== 1) {
+      return null;
+    }
+    return parsePrimaryKeyCounter(table.rows, table.primaryKey[0]);
+  });
+
+const buildScenarioMarksForTables = (baselineTables, nextTables) =>
+  nextTables.map((table, tableIndex) => {
+    const baselineRows = baselineTables[tableIndex]?.rows ?? [];
+    const marks = new Set();
+
+    table.rows.forEach((row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const baselineCell = baselineRows[rowIndex]?.[colIndex];
+        if (baselineCell !== cell) {
+          marks.add(`${tableIndex}:${rowIndex}:${colIndex}`);
+        }
+      });
+    });
+
+    return marks;
+  });
+
+const scenarioExecutors = {
+  unf: {
+    '同じ顧客の住所を片方だけ変更': (tablesForStage) => {
+      tablesForStage[0].rows[2][2] = '東京都港区9-9';
+      return { analysisTables: [0] };
+    },
+    '商品・単価・個数を「,」区切りで追加': (tablesForStage) => {
+      tablesForStage[0].rows[1][3] = 'コーヒー豆, クッキー';
+      tablesForStage[0].rows[1][4] = '980, 420';
+      tablesForStage[0].rows[1][5] = '1, 2';
+      return { analysisTables: [0] };
+    },
+    '1行を削除して必要以上の記録が消えるか確認': (tablesForStage) => {
+      tablesForStage[0].rows.splice(0, 1);
+      return { analysisTables: [0] };
+    }
+  },
+  '1nf': {
+    '同じ注文IDの担当営業を片方だけ変更': (tablesForStage) => {
+      tablesForStage[0].rows[1][6] = '伊藤';
+      return { analysisTables: [0] };
+    },
+    '同じ注文IDの営業部門を片方だけ変更': (tablesForStage) => {
+      tablesForStage[0].rows[1][7] = '西日本営業部';
+      return { analysisTables: [0] };
+    },
+    '同じ商品の単価を片方だけ変更': (tablesForStage) => {
+      tablesForStage[0].rows[4][2] = '150';
+      return { analysisTables: [0] };
+    },
+    '顧客住所を1行だけ直す': (tablesForStage) => {
+      tablesForStage[0].rows[4][5] = '千葉県千葉市5-5';
+      return { analysisTables: [0] };
+    },
+    'ある顧客に対応する最後の1行を削除して、顧客情報が消えるか確認': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter((row) => row[4] !== '青空カフェ');
+      return { analysisTables: [0] };
+    },
+    'ある商品の最後の1行を削除して、商品名と単価が消えるか確認': (tablesForStage) => {
+      tablesForStage[0].rows = tablesForStage[0].rows.filter((row) => row[1] !== 'コーヒー豆');
+      return { analysisTables: [0] };
+    },
+    '注文がない新規顧客や、新規商品だけを追加しようとしてみる': (tablesForStage) => {
+      tablesForStage[0].rows.push([
+        'O-103',
+        '',
+        '',
+        '',
+        '新規顧客サンプル',
+        '大阪府大阪市1-2',
+        '中村',
+        '中部営業部'
+      ]);
+      tablesForStage[0].rows.push([
+        '',
+        '新商品サンプル',
+        '500',
+        '',
+        '',
+        '',
+        '',
+        ''
+      ]);
+      return { analysisTables: [0] };
+    }
+  },
+  '2nf': {
+    '明細の商品IDを存在しない値に変える': (tablesForStage) => {
+      tablesForStage[1].rows[0][1] = 'P-99';
+      return { analysisTables: [1] };
+    },
+    '同じ担当営業の部門名を片方だけ変更': (tablesForStage) => {
+      tablesForStage[3].rows[2][4] = '北関東営業部';
+      return { analysisTables: [3] };
+    },
+    '顧客行を追加してズレを作る': (tablesForStage) => {
+      tablesForStage[3].rows.push([
+        'C-04',
+        '山川商会',
+        '群馬県高崎市7-1',
+        '佐藤',
+        '西日本営業部'
+      ]);
+      return { analysisTables: [3] };
+    },
+    'ある担当営業に対応する最後の顧客行を削除して、担当者情報まで消えるか確認': (tablesForStage) => {
+      tablesForStage[3].rows = tablesForStage[3].rows.filter((row) => row[3] !== '高橋');
+      return { analysisTables: [3] };
+    },
+    '担当営業だけを追加しようとしてみる': (tablesForStage) => {
+      tablesForStage[3].rows.push(['C-04', '', '', '中村', '中部営業部']);
+      return { analysisTables: [3] };
+    }
+  },
+  '3nf': {
+    '顧客に存在しない担当営業IDを入れる': (tablesForStage) => {
+      tablesForStage[3].rows[0][3] = 'S-99';
+      return { analysisTables: [3] };
+    },
+    '明細に存在しない商品IDを入れる': (tablesForStage) => {
+      tablesForStage[1].rows[0][1] = 'P-99';
+      return { analysisTables: [1] };
+    },
+    '異常なしの状態に戻して比較する': () => {
+      return { analysisTables: [0, 1, 2, 3, 4] };
+    }
+  }
+};
+
 function App() {
   const [stageIndex, setStageIndex] = useState(0);
   const [isHintOpen, setIsHintOpen] = useState(false);
@@ -94,6 +229,7 @@ function App() {
   const [analysis, setAnalysis] = useState({});
   const [selectedRowsByStage, setSelectedRowsByStage] = useState(createInitialSelections);
   const [autoCountersByStage, setAutoCountersByStage] = useState(createInitialAutoCounters);
+  const [scenarioMarksByStage, setScenarioMarksByStage] = useState(createInitialScenarioMarks);
 
   const stage = stages[stageIndex];
   const tables = stageTables[stageIndex];
@@ -120,6 +256,11 @@ function App() {
         }
         return updater(tablesForStage);
       })
+    );
+    setScenarioMarksByStage((prev) =>
+      prev.map((marksForStage, sIndex) =>
+        sIndex === stageIndex ? marksForStage.map(() => new Set()) : marksForStage
+      )
     );
     clearStageFeedback();
   };
@@ -270,6 +411,13 @@ function App() {
         });
       })
     );
+    setScenarioMarksByStage((prev) =>
+      prev.map((marksForStage, sIndex) =>
+        sIndex === stageIndex
+          ? marksForStage.map((marks, tIndex) => (tIndex === tableIndex ? new Set() : marks))
+          : marksForStage
+      )
+    );
     clearStageFeedback();
   };
 
@@ -286,6 +434,41 @@ function App() {
   const moveNext = () => {
     setStageIndex((prev) => Math.min(prev + 1, stages.length - 1));
     setIsHintOpen(false);
+  };
+
+  const runTipScenario = (tipLabel) => {
+    const executor = scenarioExecutors[stage.id]?.[tipLabel];
+    if (!executor) {
+      return;
+    }
+
+    const baselineTables = cloneTables(stages[stageIndex].tables);
+    const nextTablesForStage = cloneTables(stages[stageIndex].tables);
+    const outcome = executor(nextTablesForStage) ?? {};
+    const analysisTables = outcome.analysisTables ?? [0];
+    const fullAnalysis = analyzeStage(stage.id, nextTablesForStage, stages[stageIndex].tables);
+    const nextStageAnalysis = nextTablesForStage.map((_, tableIndex) =>
+      analysisTables.includes(tableIndex) ? filterAnalysisByTable(fullAnalysis, tableIndex) : null
+    );
+    const nextScenarioMarks = buildScenarioMarksForTables(baselineTables, nextTablesForStage);
+
+    setStageTables((prev) =>
+      prev.map((tablesForStage, sIndex) => (sIndex === stageIndex ? nextTablesForStage : tablesForStage))
+    );
+    setSelectedRowsByStage((prev) =>
+      prev.map((selectedForStage, sIndex) =>
+        sIndex === stageIndex ? nextTablesForStage.map(() => []) : selectedForStage
+      )
+    );
+    setAutoCountersByStage((prev) =>
+      prev.map((stageCounters, sIndex) =>
+        sIndex === stageIndex ? buildAutoCountersForTables(nextTablesForStage) : stageCounters
+      )
+    );
+    setScenarioMarksByStage((prev) =>
+      prev.map((marksForStage, sIndex) => (sIndex === stageIndex ? nextScenarioMarks : marksForStage))
+    );
+    setAnalysis((prev) => ({ ...prev, [stage.id]: nextStageAnalysis }));
   };
 
   return (
@@ -331,6 +514,7 @@ function App() {
             stageCount={stages.length}
             isLastStage={isLastStage}
             onOpenHint={() => setIsHintOpen(true)}
+            onRunTip={runTipScenario}
             onNext={moveNext}
           />
 
@@ -342,6 +526,7 @@ function App() {
                 tableIndex={tableIndex}
                 selectedRows={selectedRows[tableIndex] ?? []}
                 highlights={stageAnalysis[tableIndex]?.highlights}
+                modifiedCells={scenarioMarksByStage[stageIndex][tableIndex]}
                 analysis={stageAnalysis[tableIndex]}
                 onToggleRowSelection={toggleRowSelection}
                 onUpdateCell={updateCell}
