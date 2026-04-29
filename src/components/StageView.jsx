@@ -32,12 +32,14 @@ function StageView({
         <span>試してみよう:</span>
         {stage.tips.map((tip) => (
           <button
-            key={tip}
+            key={tip.label}
             type="button"
             className="tip-button"
-            onClick={() => onRunTip(tip)}
+            onClick={() => onRunTip(tip.label)}
+            aria-label={`${tip.label}: ${tip.context}`}
           >
-            {tip}
+            <span>{tip.label}</span>
+            <span className="tip-tooltip">{tip.context}</span>
           </button>
         ))}
       </div>
