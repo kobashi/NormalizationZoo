@@ -45,6 +45,8 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
   if (stageId === 'unf') {
     const table = tables[0];
     const customerAddressMap = new Map();
+    const customerRows = new Map();
+    const salesRows = new Map();
 
     table.rows.forEach((row, rowIndex) => {
       const productCell = row[3] ?? '';
@@ -98,10 +100,25 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
       }
 
       if (customer) {
+        if (!customerRows.has(customer)) {
+          customerRows.set(customer, []);
+        }
+        customerRows.get(customer).push({ rowIndex, address, sales, division });
+
         const prev = customerAddressMap.get(customer);
         if (prev && (prev.address !== address || prev.sales !== sales || prev.division !== division)) {
+          const changedFields = [];
+          if (prev.address !== address) {
+            changedFields.push('顧客住所');
+          }
+          if (prev.sales !== sales) {
+            changedFields.push('担当営業');
+          }
+          if (prev.division !== division) {
+            changedFields.push('営業部門');
+          }
           addIssue(
-            `「${customer}」の住所、担当営業、または営業部門が行ごとに一致していません。顧客情報の更新異常です。`,
+            `「${customer}」では、${changedFields.join('、')}が行ごとに一致していません。顧客情報の更新異常です。`,
             [
               makeCellKey(0, prev.rowIndex, 2),
               makeCellKey(0, prev.rowIndex, 6),
@@ -115,6 +132,44 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
           customerAddressMap.set(customer, { address, sales, division, rowIndex });
         }
       }
+
+      if (sales) {
+        if (!salesRows.has(sales)) {
+          salesRows.set(sales, []);
+        }
+        salesRows.get(sales).push({ rowIndex, division });
+      }
+    });
+
+    customerRows.forEach((entries, customer) => {
+      const addresses = new Set(entries.map((entry) => entry.address));
+      const salesPeople = new Set(entries.map((entry) => entry.sales));
+      const divisions = new Set(entries.map((entry) => entry.division));
+
+      if (entries.length > 1 && addresses.size === 1 && salesPeople.size === 1 && divisions.size === 1) {
+        addIssue(
+          `顧客「${customer}」の住所、担当営業、営業部門が複数行に繰り返し保存されています。まだズレていなくても、後の 1NF や 3NF で問題になる更新異常の芽です。`,
+          entries.flatMap((entry) => [
+            makeCellKey(0, entry.rowIndex, 1),
+            makeCellKey(0, entry.rowIndex, 2),
+            makeCellKey(0, entry.rowIndex, 6),
+            makeCellKey(0, entry.rowIndex, 7)
+          ])
+        );
+      }
+    });
+
+    salesRows.forEach((entries, sales) => {
+      const divisions = new Set(entries.map((entry) => entry.division));
+      if (entries.length > 1 && divisions.size === 1) {
+        addIssue(
+          `担当営業「${sales}」に対する営業部門が複数行に繰り返し保存されています。非正規形の段階でも、後の正規化で分けたくなる将来の更新異常として見えてきます。`,
+          entries.flatMap((entry) => [
+            makeCellKey(0, entry.rowIndex, 6),
+            makeCellKey(0, entry.rowIndex, 7)
+          ])
+        );
+      }
     });
   }
 
@@ -124,6 +179,7 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
     const orderInfoMap = new Map();
     const customerRows = new Map();
     const productRows = new Map();
+    const salesRows = new Map();
 
     table.rows.forEach((row, rowIndex) => {
       const orderId = row[0] ?? '';
@@ -146,8 +202,21 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
         const prev = orderInfoMap.get(orderId);
         const snapshot = JSON.stringify([customer, address, sales, division]);
         if (prev && prev.snapshot !== snapshot) {
+          const changedFields = [];
+          if (prev.customer !== customer) {
+            changedFields.push('顧客');
+          }
+          if (prev.address !== address) {
+            changedFields.push('顧客住所');
+          }
+          if (prev.sales !== sales) {
+            changedFields.push('担当営業');
+          }
+          if (prev.division !== division) {
+            changedFields.push('営業部門');
+          }
           addIssue(
-            `注文ID「${orderId}」に対する顧客情報、担当営業、または営業部門が行によって異なります。重複更新のズレです。`,
+            `注文ID「${orderId}」では、${changedFields.join('、')}が行によって異なります。重複更新のズレです。`,
             [
               makeCellKey(0, prev.rowIndex, 4),
               makeCellKey(0, prev.rowIndex, 5),
@@ -160,7 +229,7 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
             ]
           );
         } else if (!prev) {
-          orderInfoMap.set(orderId, { snapshot, rowIndex });
+          orderInfoMap.set(orderId, { snapshot, rowIndex, customer, address, sales, division });
         }
       }
 
@@ -169,6 +238,13 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
           customerRows.set(customer, []);
         }
         customerRows.get(customer).push({ rowIndex, address, sales, division });
+      }
+
+      if (sales) {
+        if (!salesRows.has(sales)) {
+          salesRows.set(sales, []);
+        }
+        salesRows.get(sales).push({ rowIndex, division });
       }
 
       if (!product) {
@@ -208,6 +284,27 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
         addIssue(
           `商品「${product}」の単価が複数行に繰り返し保存されています。商品単価は商品ごとに1か所で管理したくなります。`,
           entries.map((entry) => makeCellKey(0, entry.rowIndex, 2))
+        );
+      }
+    });
+
+    salesRows.forEach((entries, sales) => {
+      const divisions = new Set(entries.map((entry) => entry.division));
+      if (divisions.size > 1) {
+        addIssue(
+          `担当営業「${sales}」に対する営業部門が複数行で一致していません。これは後の 3NF でも問題になる推移的従属のズレで、今の 1NF の段階でも更新異常として現れています。`,
+          entries.flatMap((entry) => [
+            makeCellKey(0, entry.rowIndex, 6),
+            makeCellKey(0, entry.rowIndex, 7)
+          ])
+        );
+      } else if (entries.length > 1) {
+        addIssue(
+          `担当営業「${sales}」に対する営業部門が複数行に繰り返し保存されています。まだズレていなくても、後の 3NF で分けたくなる将来の更新異常の芽です。`,
+          entries.flatMap((entry) => [
+            makeCellKey(0, entry.rowIndex, 6),
+            makeCellKey(0, entry.rowIndex, 7)
+          ])
         );
       }
     });
@@ -334,6 +431,8 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
 
       const prev = salesInfoMap.get(sales);
       if (prev && prev.dept !== dept) {
+        prev.hasMismatch = true;
+        prev.rowIndices.push(rowIndex);
         addIssue(
           `担当営業「${sales}」の営業部門が顧客行ごとに一致していません。推移的従属による更新異常です。`,
           [
@@ -341,8 +440,22 @@ export function analyzeStage(stageId, tables, baselineTables = null) {
             makeCellKey(3, rowIndex, 4)
           ]
         );
+      } else if (prev) {
+        prev.rowIndices.push(rowIndex);
       } else if (!prev) {
-        salesInfoMap.set(sales, { dept, rowIndex });
+        salesInfoMap.set(sales, { dept, rowIndex, rowIndices: [rowIndex], hasMismatch: false });
+      }
+    });
+
+    salesInfoMap.forEach((info, sales) => {
+      if (!info.hasMismatch && info.rowIndices.length > 1) {
+        addIssue(
+          `担当営業「${sales}」に対する営業部門「${info.dept}」が複数の顧客行に繰り返し保存されています。まだ不一致はなくても、将来の 3NF で問題になる更新異常の起点です。`,
+          info.rowIndices.flatMap((rowIndex) => [
+            makeCellKey(3, rowIndex, 3),
+            makeCellKey(3, rowIndex, 4)
+          ])
+        );
       }
     });
 

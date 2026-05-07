@@ -14,6 +14,7 @@ function EditableTable({
   onDeleteSelectedRows,
   onResetTable,
   onAnalyzeTable,
+  scenarioSlot,
   feedbackSlot
 }) {
   const selectedCount = selectedRows.length;
@@ -51,6 +52,8 @@ function EditableTable({
           </button>
         </div>
       </div>
+
+      {scenarioSlot ? scenarioSlot() : null}
 
       <div className="table-wrap">
         <table style={table.minTableWidth ? { minWidth: `${table.minTableWidth}px` } : undefined}>

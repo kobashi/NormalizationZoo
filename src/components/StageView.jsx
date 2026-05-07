@@ -7,9 +7,6 @@ function StageView({
   stageCount,
   isLastStage,
   onOpenHint,
-  onRunTip,
-  onRunTediousScenario,
-  scenarioNote,
   onNext
 }) {
   return (
@@ -30,41 +27,6 @@ function StageView({
       </div>
 
       <p className="description"><GlossaryText text={stage.description} /></p>
-
-      <div className="tips">
-        <span>試してみよう:</span>
-        {stage.tips.map((tip) => (
-          <button
-            key={tip.label}
-            type="button"
-            className="tip-button"
-            onClick={() => onRunTip(tip.label)}
-            aria-label={`${tip.label}: ${tip.context}`}
-          >
-            <span>{tip.label}</span>
-            <span className="tip-tooltip">{tip.context}</span>
-          </button>
-        ))}
-        {stage.tediousScenarios?.map((scenario) => (
-          <button
-            key={scenario.label}
-            type="button"
-            className="tip-button tedious-button"
-            onClick={() => onRunTediousScenario(scenario.label)}
-            aria-label={`${scenario.label}: ${scenario.context}`}
-          >
-            <span>{scenario.label}</span>
-            <span className="tip-tooltip">{scenario.context}</span>
-          </button>
-        ))}
-      </div>
-
-      {scenarioNote ? (
-        <div className="scenario-note">
-          <strong>{scenarioNote.title}</strong>
-          <p><GlossaryText text={scenarioNote.message} /></p>
-        </div>
-      ) : null}
 
       <div className="stage-footer">
         <div className="goal-box">

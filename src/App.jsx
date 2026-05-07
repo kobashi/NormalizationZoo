@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import EditableTable from './components/EditableTable.jsx';
 import FeedbackPanel from './components/FeedbackPanel.jsx';
+import GlossaryText from './components/GlossaryText.jsx';
 import HintModal from './components/HintModal.jsx';
 import StageView from './components/StageView.jsx';
 import { cloneTables, stages } from './data/stages.js';
@@ -10,6 +11,16 @@ const createInitialStageTables = () => stages.map((stage) => cloneTables(stage.t
 const createInitialSelections = () => stages.map((stage) => stage.tables.map(() => []));
 const createInitialScenarioMarks = () => stages.map((stage) => stage.tables.map(() => new Set()));
 const createInitialStageNotes = () => stages.map(() => null);
+
+const normalizeScenarioTargets = (scenario) => {
+  if (Array.isArray(scenario.targetTables) && scenario.targetTables.length > 0) {
+    return scenario.targetTables;
+  }
+  if (typeof scenario.targetTable === 'string' && scenario.targetTable) {
+    return [scenario.targetTable];
+  }
+  return [];
+};
 
 const parsePrimaryKeyCounter = (rows, keyIndex) => {
   const samples = rows.map((row) => String(row[keyIndex] ?? '')).filter(Boolean);
@@ -368,6 +379,32 @@ function App() {
   const stageNote = stageNotes[stageIndex];
   const isLastStage = stageIndex === stages.length - 1;
 
+  const hasMultipleTables = tables.length > 1;
+
+  const tableScenarios = tables.map((table) => {
+    const issueScenarios = stage.tips
+      .map((tip) => ({ ...tip, kind: 'issue' }))
+      .filter((tip) => {
+        if (!hasMultipleTables) {
+          return true;
+        }
+        const targets = normalizeScenarioTargets(tip);
+        return targets.includes(table.name);
+      });
+
+    const tediousScenarios = (stage.tediousScenarios ?? [])
+      .map((scenario) => ({ ...scenario, kind: 'tedious' }))
+      .filter((scenario) => {
+        if (!hasMultipleTables) {
+          return true;
+        }
+        const targets = normalizeScenarioTargets(scenario);
+        return targets.includes(table.name);
+      });
+
+    return [...issueScenarios, ...tediousScenarios];
+  });
+
   const clearStageNote = () => {
     setStageNotes((prev) => prev.map((note, index) => (index === stageIndex ? null : note)));
   };
@@ -644,7 +681,11 @@ function App() {
     setStageNotes((prev) =>
       prev.map((note, sIndex) =>
         sIndex === stageIndex
-          ? { title: '面倒だけど正しい操作', message: scenario.message }
+          ? {
+              title: '面倒だけど正しい操作',
+              message: scenario.message,
+              targetTables: normalizeScenarioTargets(scenario)
+            }
           : note
       )
     );
@@ -693,9 +734,6 @@ function App() {
             stageCount={stages.length}
             isLastStage={isLastStage}
             onOpenHint={() => setIsHintOpen(true)}
-            onRunTip={runTipScenario}
-            onRunTediousScenario={runTediousScenario}
-            scenarioNote={stageNote}
             onNext={moveNext}
           />
 
@@ -715,6 +753,39 @@ function App() {
                 onDeleteSelectedRows={deleteSelectedRows}
                 onResetTable={resetTable}
                 onAnalyzeTable={runAnalysis}
+                scenarioSlot={() =>
+                  tableScenarios[tableIndex].length > 0 ? (
+                    <div className="table-scenarios">
+                      <span className="tips-label">試してみよう:</span>
+                      <div className="tips grouped-tips">
+                        {tableScenarios[tableIndex].map((scenario) => (
+                          <button
+                            key={scenario.label}
+                            type="button"
+                            className={`tip-button ${scenario.kind === 'tedious' ? 'tedious-button' : ''}`}
+                            onClick={() =>
+                              scenario.kind === 'tedious'
+                                ? runTediousScenario(scenario.label)
+                                : runTipScenario(scenario.label)
+                            }
+                            aria-label={`${scenario.label}: ${scenario.context}`}
+                          >
+                            <span>{scenario.label}</span>
+                            <span className="tip-tooltip">{scenario.context}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {stageNote &&
+                      (!hasMultipleTables ||
+                        stageNote.targetTables?.includes(table.name)) ? (
+                        <div className="scenario-note table-scenario-note">
+                          <strong>{stageNote.title}</strong>
+                          <p><GlossaryText text={stageNote.message} /></p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null
+                }
                 feedbackSlot={(tableAnalysis) => <FeedbackPanel analysis={tableAnalysis} />}
               />
             ))}
